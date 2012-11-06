@@ -12,7 +12,7 @@
  */
  
  
-class Price_field extends acf_Field
+class Soundcloud_field extends acf_Field
 {
 
 	/*--------------------------------------------------------------------------------------
@@ -32,8 +32,8 @@ class Price_field extends acf_Field
     	parent::__construct($parent);
     	
     	// set name / title
-    	$this->name = 'price'; // variable name (no spaces / special characters / etc)
-		$this->title = __("Price",'acf'); // field label (Displayed in edit screens)
+    	$this->name = 'soundcloud'; // variable name (no spaces / special characters / etc)
+		$this->title = __("SoundCloud",'acf'); // field label (Displayed in edit screens)
 		
    	}
 
@@ -89,10 +89,35 @@ class Price_field extends acf_Field
 	
 	function create_field($field)
 	{
-		// defaults
-		$field['symbol'] = isset($field['symbol']) ? $field['symbol'] : '';
+		if (gettype($field['value']) == 'object') {
+			$obj = $field['value'];
+			$value = $obj->permalink_url;
+		}
+
+		echo '<input type="url" value="' . $value . '" id="' . $field['name'] . '" class="' . $field['class'] . '" name="' . $field['name'] . '">';
 		
-		echo $field['symbol'] . ' <input type="text" value="' . $field['value'] . '" id="' . $field['name'] . '" class="' . $field['class'] . '" name="' . $field['name'] . '" />';
+		if ($obj) {
+			if ($obj->kind != 'track') {
+				echo "<p class='error'><strong>Error:</strong> This is a link to a {$obj->kind}, not a single track!</p>";
+			} else {
+				$total_seconds = $obj->duration / 1000;
+				$min = round($total_seconds / 60);
+				$sec = $total_seconds % 60;
+
+				$min = ($min < 10) ? '0'.$min : $min;
+				$sec = ($sec < 10) ? '0'.$sec : $sec;
+
+				?>
+				<div class='track-info'>
+					<img src='<?= $obj->artwork_url; ?>' width='40' />
+					<div class='desc'>
+						<p><strong><?= $obj->title; ?></strong></p>
+						<p class='duration'>Duration: <?= $min . ':' . $sec; ?></p>
+					</div>
+				</div>
+				<?php
+			}
+		}
 	}
 	
 	
@@ -112,10 +137,36 @@ class Price_field extends acf_Field
 	{
 		?>
 		<style type="text/css">
-			.acf_postbox .field input[type="text"].price {
-				width: 90%;
-				margin-left: 5px;
+			.acf_postbox .field input[type="url"].soundcloud {
+				width: 100%;
 			}
+
+			.acf_postbox .track-info {
+				overflow: hidden;
+				margin-top: 5px;
+			}
+
+			.acf_postbox .track-info img {
+				float: left;
+				margin: 0 5px 0 2px;
+			}
+
+			.acf_postbox p.error {
+				color: red;
+			}
+
+			.acf_postbox .track-info p {
+				margin: 0; 
+			}
+
+			.acf_postbox .track-info p.duration {
+				color: #999;
+			}
+
+			.acf_postbox .track-info p:first-child {
+				margin-top: 2px;
+			}
+
 		</style>
 		<?php	
 	}
@@ -140,10 +191,20 @@ class Price_field extends acf_Field
 	
 	function update_value($post_id, $field, $value)
 	{
-		// do stuff with value
-		$value = floatval($value);
+		// Do stuff with the value
+		$resolve_link = 'http://api.soundcloud.com/resolve.json?url=' . $value . '&client_id=4dff1d7d1d48502da29b39a453d57756';
 		
-		$value = number_format($value, 2, '.', '');
+		// Make sure the link doesn't return a 404
+		$headers = get_headers($resolve_link);
+		$server_status = substr($headers[0], 9, 3);
+
+		if ($server_status != '404') {
+			$resolve_json = file_get_contents($resolve_link);
+		}
+
+		if (isset($resolve_json)) $track_info = json_decode($resolve_json);
+		
+		$value =  $track_info ? $track_info : '';
 		
 		// save value
 		parent::update_value($post_id, $field, $value);
@@ -199,7 +260,6 @@ class Price_field extends acf_Field
 		$value = $this->get_value($post_id, $field);
 		
 		// format value
-		$value = $field['symbol'] . $value;
 		
 		// return value
 		return $value;
